@@ -18,7 +18,7 @@ export interface Round {
   currentColor(): Color | undefined;
   topCard(): Card;
   canPlay(indexInHand: number): boolean;
-  play(indexInHand: number, options?: { chooseColor?: Color }): void;
+  play(indexInHand: number, options?: { chooseColor?: Color; declareUno?: boolean }): void;
   draw(): Card | undefined;
   isOver(): boolean;
   winnerId(): string | undefined;
@@ -66,7 +66,7 @@ export class UnoRound implements Round {
     this.deck.discard(first);
 
     if (first.kind === "Wild") {
-      this._currentColor = undefined; // vælges ved første Wild-play
+      this._currentColor = undefined; // vælges af første spiller via farvet kort eller Wild-valg
     } else if ("color" in first) {
       this._currentColor = first.color;
     }
@@ -75,7 +75,7 @@ export class UnoRound implements Round {
     if (first.kind === "Skip") this.advanceTurn();
     if (first.kind === "Reverse") {
       this.flipDirection();
-      if (this.players.length === 2) this.advanceTurn(); // Reverse=Skip i 2 spillere
+      if (this.players.length === 2 && this.cfg.twoPlayerReverseActsAsSkip) this.advanceTurn();
     }
     if (first.kind === "DrawTwo") {
       this.pendingDraw += 2;
@@ -105,17 +105,17 @@ export class UnoRound implements Round {
     const card = p.hand.cards()[indexInHand];
     if (!card) return false;
 
-    // Wild+4 må kun spilles hvis man ikke har kort i aktiv farve (officiel regel)
+    // Wild+4 må kun spilles hvis man ikke har kort i aktiv farve (når challenge-reglen er slået til)
     if (card.kind === "WildDrawFour" && this.cfg.wildDraw4ChallengeEnabled) {
       return !this.hasCardInActiveColor(p);
     }
 
-    // Ellers: brug håndens playableAgainst
+    // Ellers: brug håndens playableAgainst (Wild er altid lovligt der)
     const playableIdx = p.hand.playableAgainst(this.topCard(), this._currentColor);
     return playableIdx.includes(indexInHand) || card.kind === "Wild";
   }
 
-  play(indexInHand: number, options?: { chooseColor?: Color }): void {
+  play(indexInHand: number, options?: { chooseColor?: Color; declareUno?: boolean }): void {
     const p = this.players[this.activeIndex];
 
     if (!this.canPlay(indexInHand)) throw new Error("Illegal play");
@@ -138,7 +138,7 @@ export class UnoRound implements Round {
         break;
       case "Reverse":
         this.flipDirection();
-        if (this.players.length === 2) this.advanceTurn();
+        if (this.players.length === 2 && this.cfg.twoPlayerReverseActsAsSkip) this.advanceTurn();
         break;
       case "DrawTwo":
         this.pendingDraw += 2;
@@ -150,10 +150,19 @@ export class UnoRound implements Round {
         break;
     }
 
+    // --- UNO-regel ---
+    // Hvis spilleren står tilbage med 1 kort og IKKE har erklæret UNO,
+    // gives straf med det samme (cfg.unoPenaltyCards)
+    if (p.hand.size() === 1) {
+      if (!options?.declareUno) {
+        this.deck.drawMany(this.cfg.unoPenaltyCards).forEach((c) => p.hand.add(c));
+      }
+    }
+
     // Vandt spilleren runden?
     if (p.hand.size() === 0) return;
 
-    // Normal turfremskridt (hvis ikke allerede sket)
+    // Normal turfremskridt (hvis ikke allerede sket via effekter)
     if (!["Skip", "Reverse", "DrawTwo", "WildDrawFour"].includes(card.kind)) {
       this.advanceTurn();
     }

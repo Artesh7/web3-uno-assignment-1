@@ -1,4 +1,4 @@
-import { Card, CardMemento, Color, toCardMemento } from "./cards";
+import { Card, CardMemento, Color, toCardMemento, NumberValue } from "./cards";
 
 export type DeckMemento = {
   drawPile: CardMemento[];
@@ -81,11 +81,11 @@ function buildFullUnoSet(): Card[] {
     cards.push({ kind: "Number", color, value: 0 });
     // 2×(1..9)
     for (let v = 1; v <= 9; v++) {
-      cards.push({ kind: "Number", color, value: v as any });
-      cards.push({ kind: "Number", color, value: v as any });
+      cards.push({ kind: "Number", color, value: v as NumberValue });
+      cards.push({ kind: "Number", color, value: v as NumberValue });
     }
     // 2× action
-    (["Skip", "Reverse", "DrawTwo"] as const).forEach(k => {
+    (["Skip", "Reverse", "DrawTwo"] as const).forEach((k) => {
       cards.push({ kind: k, color });
       cards.push({ kind: k, color });
     });
