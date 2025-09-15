@@ -1,50 +1,76 @@
-Set-Content -Path .\src\components\CardView.vue -Value @'
 <script setup lang="ts">
 import type { CardMemento } from "@core/domain/cards";
+
+// Hent alle PNG'er i mappen som URL'er (bundles af Vite)
+const raw = import.meta.glob("@/assets/uno_cards/*.png", {
+  eager: true,
+  as: "url",
+}) as Record<string, string>;
+
+// Lav et map: filnavn -> url (robust mod forskellige path-prefixes)
+const byName = new Map<string, string>();
+for (const [p, url] of Object.entries(raw)) {
+  const name = p.split("/").pop()!; // fx "blue_0.png"
+  byName.set(name, url);
+}
 
 const props = defineProps<{ card: CardMemento; disabled?: boolean }>();
 const emit = defineEmits<{ (e: "click"): void }>();
 
-function bgForCard(c: CardMemento) {
-  if ("color" in c) return c.color.toLowerCase();
-  return "wild";
+function fileName(c: CardMemento): string {
+  const k = (c as any).kind as string;
+  // Dine faktiske filnavne:
+  // blue_0.png ... blue_9.png
+  // blue_skip.png, blue_reverse.png, blue_draw_two.png
+  // wild.png, wild_draw_four.png
+  if (k === "Number") return `${(c as any).color.toLowerCase()}_${(c as any).value}.png`;
+  if (k === "Skip") return `${(c as any).color.toLowerCase()}_skip.png`;
+  if (k === "Reverse") return `${(c as any).color.toLowerCase()}_reverse.png`;
+  if (k === "DrawTwo") return `${(c as any).color.toLowerCase()}_draw_two.png`;
+  if (k === "Wild") return `wild.png`;
+  if (k === "WildDrawFour") return `wild_draw_four.png`;
+  return `wild.png`;
 }
-function label(c: CardMemento) {
-  if (c.kind === "Number") return `${c.color} ${c.value}`;
-  if (c.kind === "Wild" || c.kind === "WildDrawFour") return c.kind;
-  return `${c.color} ${c.kind}`;
+
+function srcFor(c: CardMemento) {
+  const name = fileName(c);
+  const url = byName.get(name);
+  if (!url) {
+    console.warn(`Mangler billede for: ${name}`);
+    return byName.get("wild.png"); // fallback
+  }
+  return url;
 }
 </script>
 
 <template>
-  <button
-    class="card"
-    :data-bg="bgForCard(card)"
-    :disabled="disabled"
-    @click="emit('click')"
-  >
-    <span>{{ label(card) }}</span>
+  <button class="card-btn" :disabled="disabled" @click="emit('click')">
+    <img class="card-img" :src="srcFor(card)" :alt="(card as any).kind" />
   </button>
 </template>
 
 <style scoped>
-.card {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 80px;
-  height: 120px;
-  margin: 6px;
-  border-radius: 10px;
-  border: 2px solid #222;
-  font-weight: 700;
+.card-btn {
+  padding: 0;
+  border: none;
+  background: transparent;
   cursor: pointer;
+  margin: 6px;
+  transition: transform 0.08s ease, filter 0.08s ease;
 }
-.card[disabled] { opacity: 0.5; cursor: default; }
-.card[data-bg="red"] { background: #ff4d4f; color: #fff; }
-.card[data-bg="yellow"] { background: #fff566; color: #222; }
-.card[data-bg="green"] { background: #95de64; color: #222; }
-.card[data-bg="blue"] { background: #69c0ff; color: #222; }
-.card[data-bg="wild"] { background: #111; color: #fff; }
+.card-btn:disabled {
+  cursor: default;
+  filter: grayscale(0.35) opacity(0.75);
+}
+.card-btn:not(:disabled):hover {
+  transform: translateY(-2px);
+}
+
+.card-img {
+  width: 86px;
+  height: 128px;
+  object-fit: cover;
+  border-radius: 12px;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.2), 0 6px 12px rgba(0, 0, 0, 0.25);
+}
 </style>
-'@
